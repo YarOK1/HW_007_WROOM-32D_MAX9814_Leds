@@ -1,3 +1,4 @@
+#include "../config.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>  // асинхронний веб-сервер для обробки HTTP-запитів без блокування основного потоку
 #include <WiFi.h>
@@ -15,8 +16,8 @@
 
   Переваги:
     1) ефективність: Не блокує ядро, дозволяючи виконувати інші задачі
-  (наприклад, обробку звуку). 2) швидкість: Швидше реагує на кілька запитів, що
-  важливо для веб-інтерфейсу. 3) масштабованість: Підходить для систем із
+  (наприклад, обробку звуку). 2) швидкість: швидше реагує на кілька запитів, що
+  важливо для веб-інтерфейсу. 3) масштабованість: підходить для систем із
   багатьма клієнтами. Це дозволяє ESP32 одночасно слухати запити і керувати
   світлодіодами без затримок.
 */
@@ -36,8 +37,8 @@
 #define NUM_LEDS_CIRCLES_TOTAL 28  // усі світлодіоди кіл
 #define NUM_LEDS_SQUARES_TOTAL 32  // усі світлодіоди квадратів
 
-const char *ssid = "Vidrodgennya_2G";
-const char *password = "960010Kalash";
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
 
 CRGB leds_circles[NUM_LEDS_CIRCLES_TOTAL];      // масив для кіл (16 + 12)
 CRGB leds_squares[NUM_LEDS_SQUARES_TOTAL];      // масив для квадратів (16 + 16)
@@ -210,11 +211,12 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
     допомогою FFT для виділення частотних компонентів (баси, середні, високі).
     Керування світлодіодами WS2812B через бібліотеку FastLED у режимах, які
     перемикаються через веб-сервер. Кроки перетворення "сирих" значень у плавну
-    світломузику: 1) Збір зразків: зчитування 128 значень з мікрофона
-    (analogRead). 2) Корекція аномалій: Заміна значень < 0 або > 4095 на
-    попереднє або 2048. 3) Видалення DC: віднімання середнього для усунення
-    постійної складової. 4) Фільтрація: застосування IIR-фільтра для
-    згладжування. 5) FFT: перетворення в частотну область (windowing, compute).
+    світломузику: 
+      1) Збір зразків: зчитування 128 значень з мікрофона (analogRead). 
+      2) Корекція аномалій: заміна значень < 0 або > 4095 на попереднє або 2048. 
+      3) Видалення DC: віднімання середнього для усунення постійної складової. 
+      4) Фільтрація: застосування IIR-фільтра для згладжування. 
+      5) FFT: перетворення в частотну область (windowing, compute).
       6) Обчислення амплітуд: перехід до величин (complexToMagnitude).
       7) Розподіл частот: поділ на баси, середні, високі.
       8) Нормалізація: масштабування амплітуд за енергією сигналу.
@@ -302,8 +304,7 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
 
     // 5) FFT: перетворення в частотну область (windowing, compute) - виконуємо
     // послідовно три процедури Fast Fourier Transform, FFT:
-    FFT.windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING,
-                  FFT_FORWARD);  // Функція для зменшення впливу країв сигналу
+    FFT.windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);  // Функція для зменшення впливу країв сигналу
     /*
       Коли ми беремо скінченний набір зразків сигналу (наприклад, 128 зразків із
       частотою 10 кГц, як у нас), ми фактично "вирізаємо" шматок із
@@ -345,7 +346,9 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       витоків.
     */
 
-    FFT.compute(vReal, vImag, SAMPLES,
+    FFT.compute(vReal,
+                vImag,
+                SAMPLES,
                 FFT_FORWARD);  // виконує FFT для перетворення сигналу в
                                // частотну область
     /*
@@ -359,7 +362,8 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       vReal і vImag містять комплексні числа, що представляють частотний спектр.
     */
 
-    FFT.complexToMagnitude(vReal, vImag,
+    FFT.complexToMagnitude(vReal,
+                           vImag,
                            SAMPLES);  // 6) Обчислення амплітуд: перехід до величин
                                       // (complexToMagnitude) перетворює комплексні числа у
                                       // величину (амплітуду) для кожної частоти
@@ -369,8 +373,7 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
     ampB = 0;  // 7) Розподіл частот: поділ на баси, середні, високі: R - баси
                // (0–20), G - середні (20–80), B - високі (80–128)
     for (int i = 0; i < SAMPLES; i++) {
-      if (i < 20)
-        ampR += abs(vReal[i]);
+      if (i < 20) ampR += abs(vReal[i]);
       else if (i < 80)
         ampG += abs(vReal[i]);
       else
@@ -409,16 +412,14 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       100, 150) масштабують їх до видимого діапазону.
     */
 
-    // 9) Ковзне середнє: згладжування значень амплітуд із часом - усереднюємо
-    // амплітуди для плавної зміни кольорів
+    // 9) Ковзне середнє: згладжування значень амплітуд із часом - усереднюємо амплітуди для плавної зміни кольорів
     avgAmpR = (avgAmpR * count + ampR) / (count + 1);
     avgAmpG = (avgAmpG * count + ampG) / (count + 1);
     avgAmpB = (avgAmpB * count + ampB) / (count + 1);
     count++;
     if (count > 50) count = 50;
 
-    //  пороги потрібні для реалізації конкретної ідеї світломузики на
-    //  led-кружальці - для визначення кількості led які мають світитись
+    //  пороги потрібні для реалізації конкретної ідеї світломузики на led-кружальці - для визначення кількості led які мають світитись
     int porigR = avgAmpR * 0.8;
     int porigG = avgAmpG * 1.2;
     int porigB = avgAmpB * 0.8;
@@ -436,11 +437,9 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       lastPrint = millis();
     }
 
-    FastLED.clear();  // 10) Керування LED: переведення амплітуд у
-                      // кольори/яскравість залежно від режиму
-    if (mode == 1) {  // Перше коло (16 LED)
-      if (ampR < porigR)
-        leds_circles[0] = CRGB(255, 0, 0);
+    FastLED.clear();  // 10) Керування LED: переведення амплітуд у кольори/яскравість залежно від режиму
+    if (mode == 1) {  // перше коло (16 LED)
+      if (ampR < porigR) leds_circles[0] = CRGB(255, 0, 0);
       else if (ampR < porigR * 1.25)
         std::fill(leds_circles + 0, leds_circles + 2, CRGB(255, 0, 0));
       else if (ampR < porigR * 1.5)
@@ -452,8 +451,7 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       else
         std::fill(leds_circles + 0, leds_circles + 6, CRGB(255, 0, 0));
 
-      if (ampG < porigG)
-        leds_circles[6] = CRGB(0, 255, 0);
+      if (ampG < porigG) leds_circles[6] = CRGB(0, 255, 0);
       else if (ampG < porigG * 1.3)
         std::fill(leds_circles + 6, leds_circles + 8, CRGB(0, 255, 0));
       else if (ampG < porigG * 1.6)
@@ -463,8 +461,7 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       else
         std::fill(leds_circles + 6, leds_circles + 11, CRGB(0, 255, 0));
 
-      if (ampB < porigB)
-        leds_circles[11] = CRGB(0, 0, 255);
+      if (ampB < porigB) leds_circles[11] = CRGB(0, 0, 255);
       else if (ampB < porigB * 1.3)
         std::fill(leds_circles + 11, leds_circles + 13, CRGB(0, 0, 255));
       else if (ampB < porigB * 1.6)
@@ -473,17 +470,19 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
         std::fill(leds_circles + 11, leds_circles + 15, CRGB(0, 0, 255));
       else
         std::fill(leds_circles + 11, leds_circles + 16, CRGB(0, 0, 255));
-    } else if (mode == 2) {  // Друге коло (12 LED)
+
+    } else if (mode == 2) {  // друге коло (12 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
       std::fill(leds_circles + NUM_LEDS_CIRCLE1, leds_circles + NUM_LEDS_CIRCLES_TOTAL, CRGB(brightness, 0, brightness));
-    } else if (mode == 3) {  // Обидва кола (28 LED)
+
+    } else if (mode == 3) {  // обидва кола (28 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
       std::fill(leds_circles, leds_circles + NUM_LEDS_CIRCLES_TOTAL, CRGB(brightness, 0, brightness));
-    } else if (mode == 4) {  // Перший квадрат (16 LED)
-      if (ampR < porigR)
-        leds_squares[0] = CRGB(255, 0, 0);
+
+    } else if (mode == 4) {  // перший квадрат (16 LED)
+      if (ampR < porigR) leds_squares[0] = CRGB(255, 0, 0);
       else if (ampR < porigR * 1.25)
         std::fill(leds_squares + 0, leds_squares + 2, CRGB(255, 0, 0));
       else if (ampR < porigR * 1.5)
@@ -495,8 +494,7 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       else
         std::fill(leds_squares + 0, leds_squares + 6, CRGB(255, 0, 0));
 
-      if (ampG < porigG)
-        leds_squares[6] = CRGB(0, 255, 0);
+      if (ampG < porigG) leds_squares[6] = CRGB(0, 255, 0);
       else if (ampG < porigG * 1.3)
         std::fill(leds_squares + 6, leds_squares + 8, CRGB(0, 255, 0));
       else if (ampG < porigG * 1.6)
@@ -506,8 +504,7 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
       else
         std::fill(leds_squares + 6, leds_squares + 11, CRGB(0, 255, 0));
 
-      if (ampB < porigB)
-        leds_squares[11] = CRGB(0, 0, 255);
+      if (ampB < porigB) leds_squares[11] = CRGB(0, 0, 255);
       else if (ampB < porigB * 1.3)
         std::fill(leds_squares + 11, leds_squares + 13, CRGB(0, 0, 255));
       else if (ampB < porigB * 1.6)
@@ -516,15 +513,18 @@ void lightMusicTask(void *pvParameters) {  // обробка звуку та к�
         std::fill(leds_squares + 11, leds_squares + 15, CRGB(0, 0, 255));
       else
         std::fill(leds_squares + 11, leds_squares + 16, CRGB(0, 0, 255));
-    } else if (mode == 5) {  // Другий квадрат (16 LED)
+
+    } else if (mode == 5) {  // другий квадрат (16 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
       std::fill(leds_squares + NUM_LEDS_SQUARE1, leds_squares + NUM_LEDS_SQUARES_TOTAL, CRGB(brightness, 0, brightness));
-    } else if (mode == 6) {  // Обидва квадрати (32 LED)
+
+    } else if (mode == 6) {  // обидва квадрати (32 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
       std::fill(leds_squares, leds_squares + NUM_LEDS_SQUARES_TOTAL, CRGB(brightness, 0, brightness));
-    } else if (mode == 7) {  // Усе разом (28 + 32 LED)
+
+    } else if (mode == 7) {  // усе разом (28 + 32 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 1500, 0, 255);
       std::fill(leds_circles, leds_circles + NUM_LEDS_CIRCLES_TOTAL, CRGB(brightness, 0, brightness));

@@ -1,9 +1,9 @@
 BasedOnStyle: Google
 IndentWidth: 2
-ColumnLimit: 200
+ColumnLimit: 250
 AllowShortBlocksOnASingleLine: Always
 AllowShortFunctionsOnASingleLine: All
-AllowShortIfStatementsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: Always
 AllowShortLoopsOnASingleLine: true
 PenaltyBreakBeforeFirstCallParameter: 1000
 PenaltyBreakComment: 1000
@@ -12,3 +12,6 @@ PenaltyReturnTypeOnItsOwnLine: 1000
 ContinuationIndentWidth: 2
 KeepEmptyLinesAtTheStartOfBlocks: false
 ReflowComments: false
+BinPackArguments: false
+BinPackParameters: false
+PenaltyBreakAssignment: 1000
