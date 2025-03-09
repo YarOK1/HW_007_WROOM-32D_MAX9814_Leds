@@ -27,7 +27,7 @@
   </style>
 </head>
 <body>
-  <h1>Керування світломузикою</h1>
+  <h1>Керування світломузикою (домашня робота Ярослава)</h1>
   <p>Виберіть режим роботи:</p>
   <button onclick="sendRequest('/mode1')">Режим 1: Більше коло (16 LED)</button><br>
   <button onclick="sendRequest('/mode2')">Режим 2: Менше коло (12 LED)</button><br>
@@ -38,7 +38,7 @@
   <button onclick="sendRequest('/mode7')">Режим 7: Усе разом (60 LED)</button>
 
   <script>
-    const esp32Ip = "192.168.0.81"; // Онови на актуальну IP
+    const esp32Ip = "192.168.0.81";
   
     function sendRequest(mode) {
       fetch(`http://${esp32Ip}:80${mode}`)
@@ -52,7 +52,6 @@
         })
         .catch(error => {
           console.log("Помилка: " + error);
-          // Прибираємо alert про помилку, бо режими все одно змінюються
         });
     }
   </script>

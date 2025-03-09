@@ -1,6 +1,6 @@
-BasedOnStyle: Google
+BasedOnStyle: LLVM
 IndentWidth: 2
-ColumnLimit: 250
+ColumnLimit: 0
 AllowShortBlocksOnASingleLine: Always
 AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: Always
@@ -9,7 +9,7 @@ PenaltyBreakBeforeFirstCallParameter: 1000
 PenaltyBreakComment: 1000
 PenaltyExcessCharacter: 1
 PenaltyReturnTypeOnItsOwnLine: 1000
-ContinuationIndentWidth: 2
+ContinuationIndentWidth: 0
 KeepEmptyLinesAtTheStartOfBlocks: false
 ReflowComments: false
 BinPackArguments: false
