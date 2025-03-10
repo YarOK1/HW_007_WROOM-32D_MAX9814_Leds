@@ -24,24 +24,31 @@
 #include <FastLED.h>    // бібліотека для керування адресними світлодіодами (наприклад, WS2812B)
 #include <WiFi.h>
 
-#define SAMPLES 128               // кількість зразків для FFT (128 точок даних для аналізу сигналу)
-#define SAMPLING_FREQ 10000       // частота дискретизації (10 кГц), тобто 10 000 зразків за секунду
-#define LED_PIN_CIRCLES 25        // пін для кіл (16 + 12 LED)
-#define LED_PIN_SQUARES 26        // пін для квадратів (16 + 16 LED)
-#define NUM_LEDS_CIRCLE1 16       // перше коло
-#define NUM_LEDS_CIRCLE2 12       // друге коло
-#define NUM_LEDS_SQUARE1 16       // перший квадрат
-#define NUM_LEDS_SQUARE2 16       // другий квадрат
-#define NUM_LEDS_CIRCLES_TOTAL 28 // усі світлодіоди кіл
-#define NUM_LEDS_SQUARES_TOTAL 32 // усі світлодіоди квадратів
+#define SAMPLES 128         // кількість зразків для FFT (128 точок даних для аналізу сигналу)
+#define SAMPLING_FREQ 10000 // частота дискретизації (10 кГц), тобто 10 000 зразків за секунду
+
+#define LED_PIN_16_CIRCLE 26 // пін для великого кола (16 LED)
+#define LED_PIN_12_CIRCLE 33 // пін для малого кола (12 LED)
+#define LED_PIN_L_SQUARE 25  // пін для великого кола (16 LED)
+#define LED_PIN_R_SQUARE 32  // пін для малого кола (12 LED)
+
+#define NUM_LEDS_16_CIRCLE 16 // кількість LED у великому колі
+#define NUM_LEDS_12_CIRCLE 12 // кількість LED у малому колі
+#define NUM_LEDS_L_SQUARE 16  // кількість LED у лівому квадраті
+#define NUM_LEDS_R_SQUARE 16  // кількість LED у правому квадраті
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
 
-CRGB leds_circles[NUM_LEDS_CIRCLES_TOTAL];     // масив для кіл (16 + 12)
-CRGB leds_squares[NUM_LEDS_SQUARES_TOTAL];     // масив для квадратів (16 + 16)
-AsyncWebServer server(80);                     // об’єкт асинхронного веб-сервера, що слухає порт 80 (стандартний HTTP-порт)
+CRGB leds_16_circle[NUM_LEDS_16_CIRCLE]; // масив для великого кола
+CRGB leds_12_circle[NUM_LEDS_12_CIRCLE]; // масив для малого кола
+CRGB leds_L_SQUARE[NUM_LEDS_L_SQUARE];   // масив для лівого квадрата
+CRGB leds_R_SQUARE[NUM_LEDS_R_SQUARE];   // масив для правого квадрата
+
+AsyncWebServer server(80); // об’єкт асинхронного веб-сервера, що слухає порт 80 (стандартний HTTP-порт)
+
 ArduinoFFT<double> FFT = ArduinoFFT<double>(); // об’єкт FFT для аналізу сигналу
+double vRawData[SAMPLES];                      // масив для зберігання "сирих" даних для порівняння у світломузиці
 double vReal[SAMPLES];                         // масив для зберігання реальних частин сигналу
 double vImag[SAMPLES];                         // масив для зберігання уявних частин сигналу
 volatile int mode = 1;                         // поточний режим роботи (встановлюється віддалено через веб-сервер);
@@ -235,10 +242,11 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
   */
   static int count = 0;
 
-  for (;;) {                            // безкінечний цикл обробки звуку та оновлення світлодіодів
+  while (true) {                        // безкінечний цикл обробки звуку та оновлення світлодіодів
     for (int i = 0; i < SAMPLES; i++) { // 1) Збір зразків: зчитування 128 значень з мікрофона. +робимо
                                         // перевірку на аномалії за межами діапазону АЦП ESP32 (0–4095)
       vReal[i] = analogRead(34);        // зчитуємо зразки із аналогового входу
+      vRawData[i] = vReal[i];           // зберігаємо копію "сирих" даних для порівняння у світломузиці
       vImag[i] = 0;                     // уявна частина сигналу не потрібна для реального входу
       if (vReal[i] < 0 || vReal[i] > 4095)
         vReal[i] = (i > 0) ? vReal[i - 1] : 2048; // 2) Корекція аномалій: заміна значень <0
@@ -429,71 +437,62 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
 
     // clang-format off
     FastLED.clear(); // 10) Керування LED: переведення амплітуд у кольори/яскравість залежно від режиму
-    if (mode == 1) { // перше коло (16 LED)
-      if (ampR < porigR) leds_circles[0] = CRGB(255, 0, 0); 
-      else if (ampR < porigR * 1.25) std::fill(leds_circles + 0, leds_circles + 2, CRGB(255, 0, 0));
-      else if (ampR < porigR * 1.5) std::fill(leds_circles + 0, leds_circles + 3, CRGB(255, 0, 0));
-      else if (ampR < porigR * 1.75) std::fill(leds_circles + 0, leds_circles + 4, CRGB(255, 0, 0));
-      else if (ampR < porigR * 2) std::fill(leds_circles + 0, leds_circles + 5, CRGB(255, 0, 0));
-      else std::fill(leds_circles + 0, leds_circles + 6, CRGB(255, 0, 0));
+    if (mode == 1) { // велике коло (16 LED)
+      if (ampR < porigR) leds_16_circle[0] = CRGB(255, 0, 0); 
+      else if (ampR < porigR * 1.25) std::fill(leds_16_circle + 0, leds_16_circle + 2, CRGB(255, 0, 0));
+      else if (ampR < porigR * 1.5) std::fill(leds_16_circle + 0, leds_16_circle + 3, CRGB(255, 0, 0));
+      else if (ampR < porigR * 1.75) std::fill(leds_16_circle + 0, leds_16_circle + 4, CRGB(255, 0, 0));
+      else if (ampR < porigR * 2) std::fill(leds_16_circle + 0, leds_16_circle + 5, CRGB(255, 0, 0));
+      else std::fill(leds_16_circle + 0, leds_16_circle + 6, CRGB(255, 0, 0));
 
-      if (ampG < porigG) leds_circles[6] = CRGB(0, 255, 0);
-      else if (ampG < porigG * 1.3) std::fill(leds_circles + 6, leds_circles + 8, CRGB(0, 255, 0));
-      else if (ampG < porigG * 1.6) std::fill(leds_circles + 6, leds_circles + 9, CRGB(0, 255, 0));
-      else if (ampG < porigG * 1.9) std::fill(leds_circles + 6, leds_circles + 10, CRGB(0, 255, 0));
-      else std::fill(leds_circles + 6, leds_circles + 11, CRGB(0, 255, 0));
+      if (ampG < porigG) leds_16_circle[6] = CRGB(0, 255, 0);
+      else if (ampG < porigG * 1.3) std::fill(leds_16_circle + 6, leds_16_circle + 8, CRGB(0, 255, 0));
+      else if (ampG < porigG * 1.6) std::fill(leds_16_circle + 6, leds_16_circle + 9, CRGB(0, 255, 0));
+      else if (ampG < porigG * 1.9) std::fill(leds_16_circle + 6, leds_16_circle + 10, CRGB(0, 255, 0));
+      else std::fill(leds_16_circle + 6, leds_16_circle + 11, CRGB(0, 255, 0));
 
-      if (ampB < porigB) leds_circles[11] = CRGB(0, 0, 255);
-      else if (ampB < porigB * 1.3) std::fill(leds_circles + 11, leds_circles + 13, CRGB(0, 0, 255));
-      else if (ampB < porigB * 1.6) std::fill(leds_circles + 11, leds_circles + 14, CRGB(0, 0, 255));
-      else if (ampB < porigB * 1.9) std::fill(leds_circles + 11, leds_circles + 15, CRGB(0, 0, 255));
-      else std::fill(leds_circles + 11, leds_circles + 16, CRGB(0, 0, 255));
+      if (ampB < porigB) leds_16_circle[11] = CRGB(0, 0, 255);
+      else if (ampB < porigB * 1.3) std::fill(leds_16_circle + 11, leds_16_circle + 13, CRGB(0, 0, 255));
+      else if (ampB < porigB * 1.6) std::fill(leds_16_circle + 11, leds_16_circle + 14, CRGB(0, 0, 255));
+      else if (ampB < porigB * 1.9) std::fill(leds_16_circle + 11, leds_16_circle + 15, CRGB(0, 0, 255));
+      else std::fill(leds_16_circle + 11, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(0, 0, 255));
 
-    } else if (mode == 2) { // друге коло (12 LED)
+    } else if (mode == 2) { // мале коло (12 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_circles + NUM_LEDS_CIRCLE1, leds_circles + NUM_LEDS_CIRCLES_TOTAL, CRGB(brightness, 0, brightness));
+      std::fill(leds_12_circle + 0, leds_12_circle + NUM_LEDS_12_CIRCLE, CRGB(0, 0, brightness));
 
-    } else if (mode == 3) { // обидва кола (28 LED)
+    } else if (mode == 3) { // обидва кола
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_circles, leds_circles + NUM_LEDS_CIRCLES_TOTAL, CRGB(brightness, 0, 0));
+      std::fill(leds_16_circle + 0, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(brightness, 0, 0));
+      std::fill(leds_12_circle + 0, leds_12_circle + NUM_LEDS_12_CIRCLE, CRGB(0, brightness, 0));
 
-    } else if (mode == 4) { // перший квадрат (16 LED)
-      if (ampR < porigR) leds_squares[0] = CRGB(255, 0, 0);
-      else if (ampR < porigR * 1.25) std::fill(leds_squares + 0, leds_squares + 2, CRGB(255, 0, 0));
-      else if (ampR < porigR * 1.5) std::fill(leds_squares + 0, leds_squares + 3, CRGB(255, 0, 0));
-      else if (ampR < porigR * 1.75) std::fill(leds_squares + 0, leds_squares + 4, CRGB(255, 0, 0));
-      else if (ampR < porigR * 2) std::fill(leds_squares + 0, leds_squares + 5, CRGB(255, 0, 0));
-      else std::fill(leds_squares + 0, leds_squares + 6, CRGB(255, 0, 0));
+      // Нижче код для виконання на малому колі(12 ледів)
 
-      if (ampG < porigG) leds_squares[6] = CRGB(0, 255, 0);
-      else if (ampG < porigG * 1.3) std::fill(leds_squares + 6, leds_squares + 8, CRGB(0, 255, 0));
-      else if (ampG < porigG * 1.6) std::fill(leds_squares + 6, leds_squares + 9, CRGB(0, 255, 0));
-      else if (ampG < porigG * 1.9) std::fill(leds_squares + 6, leds_squares + 10, CRGB(0, 255, 0));
-      else std::fill(leds_squares + 6, leds_squares + 11, CRGB(0, 255, 0));
-
-      if (ampB < porigB) leds_squares[11] = CRGB(0, 0, 255);
-      else if (ampB < porigB * 1.3) std::fill(leds_squares + 11, leds_squares + 13, CRGB(0, 0, 255));
-      else if (ampB < porigB * 1.6) std::fill(leds_squares + 11, leds_squares + 14, CRGB(0, 0, 255));
-      else if (ampB < porigB * 1.9) std::fill(leds_squares + 11, leds_squares + 15, CRGB(0, 0, 255));
-      else std::fill(leds_squares + 11, leds_squares + 16, CRGB(0, 0, 255));
-
-    } else if (mode == 5) { // другий квадрат (16 LED)
+    } else if (mode == 4) { // лівий квадрат (16 LED) 
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_squares + NUM_LEDS_SQUARE1, leds_squares + NUM_LEDS_SQUARES_TOTAL, CRGB(0, 0, brightness));
+      std::fill(leds_L_SQUARE + 0, leds_L_SQUARE + NUM_LEDS_L_SQUARE, CRGB(brightness, 0, 0));
+
+    } else if (mode == 5) { // правий квадрат (16 LED)
+      int totalAmp = (ampR + ampG + ampB) / 3;
+      int brightness = map(totalAmp, 0, 600, 0, 255);
+      std::fill(leds_R_SQUARE + 0, leds_R_SQUARE + NUM_LEDS_R_SQUARE, CRGB(0, brightness, 0));
 
     } else if (mode == 6) { // обидва квадрати (32 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_squares, leds_squares + NUM_LEDS_SQUARES_TOTAL, CRGB(brightness, brightness, brightness));
+      std::fill(leds_L_SQUARE + 0, leds_L_SQUARE + NUM_LEDS_L_SQUARE, CRGB(brightness, 0, 0));
+      std::fill(leds_R_SQUARE + 0, leds_R_SQUARE + NUM_LEDS_R_SQUARE, CRGB(0, brightness, 0));
 
     } else if (mode == 7) { // усе разом (28 + 32 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_circles, leds_circles + NUM_LEDS_CIRCLES_TOTAL, CRGB(0, brightness, brightness));
-      std::fill(leds_squares, leds_squares + NUM_LEDS_SQUARES_TOTAL, CRGB(brightness, brightness, 0));
+      std::fill(leds_16_circle + 0, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(brightness, 0, 0));
+      std::fill(leds_12_circle + 0, leds_12_circle + NUM_LEDS_12_CIRCLE, CRGB(0, brightness, 0));
+      std::fill(leds_L_SQUARE + 0, leds_L_SQUARE + NUM_LEDS_L_SQUARE, CRGB(brightness, 0, 0));
+      std::fill(leds_R_SQUARE + 0, leds_R_SQUARE + NUM_LEDS_R_SQUARE, CRGB(0, brightness, 0));
     }
 
     FastLED.show();
@@ -512,9 +511,13 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
 
 void setup() {
   Serial.begin(115200);
+  delay(1000); // Даємо час для стабілізації UART
+
   pinMode(34, INPUT);
-  FastLED.addLeds<WS2812B, LED_PIN_CIRCLES, GRB>(leds_circles, NUM_LEDS_CIRCLES_TOTAL);
-  FastLED.addLeds<WS2812B, LED_PIN_SQUARES, GRB>(leds_squares, NUM_LEDS_SQUARES_TOTAL);
+  FastLED.addLeds<WS2812B, LED_PIN_16_CIRCLE, GRB>(leds_16_circle, NUM_LEDS_16_CIRCLE);
+  FastLED.addLeds<WS2812B, LED_PIN_12_CIRCLE, GRB>(leds_12_circle, NUM_LEDS_12_CIRCLE);
+  FastLED.addLeds<WS2812B, LED_PIN_L_SQUARE, GRB>(leds_L_SQUARE, NUM_LEDS_L_SQUARE);
+  FastLED.addLeds<WS2812B, LED_PIN_R_SQUARE, GRB>(leds_R_SQUARE, NUM_LEDS_R_SQUARE);
   FastLED.setBrightness(100);
 
   WiFi.begin(ssid, password);
