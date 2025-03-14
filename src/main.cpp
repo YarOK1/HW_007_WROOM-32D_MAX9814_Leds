@@ -32,10 +32,11 @@
 #define LED_PIN_L_SQUARE 25  // пін для великого кола (16 LED)
 #define LED_PIN_R_SQUARE 32  // пін для малого кола (12 LED)
 
-#define NUM_LEDS_16_CIRCLE 16 // кількість LED у великому колі
-#define NUM_LEDS_12_CIRCLE 12 // кількість LED у малому колі
-#define NUM_LEDS_L_SQUARE 16  // кількість LED у лівому квадраті
-#define NUM_LEDS_R_SQUARE 16  // кількість LED у правому квадраті
+#define NUM_LEDS_16_CIRCLE 16             // кількість LED у великому колі
+#define NUM_LEDS_12_CIRCLE 12             // кількість LED у малому колі
+#define NUM_LEDS_L_SQUARE 16              // кількість LED у лівому квадраті
+#define NUM_LEDS_R_SQUARE 16              // кількість LED у правому квадраті
+#define const_digital_for_small_circle 12 // константа для залиття малого кола
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
@@ -51,10 +52,12 @@ ArduinoFFT<double> FFT = ArduinoFFT<double>(); // об’єкт FFT для ан�
 double vRawData[SAMPLES];                      // масив для зберігання "сирих" даних для порівняння у світломузиці
 double vReal[SAMPLES];                         // масив для зберігання реальних частин сигналу
 double vImag[SAMPLES];                         // масив для зберігання уявних частин сигналу
-volatile int mode = 1;                         // поточний режим роботи (встановлюється віддалено через веб-сервер);
+volatile int mode = 2;                         // поточний режим роботи (встановлюється віддалено через веб-сервер);
                                                // volatile, бо використовується у кількох задачах
 
 int ampR, ampG, ampB; // для зберігання амплітуд частотних діапазонів: басів (R), середніх частот (G), високих частот (B)
+int small_circle = 0;
+int my_counter = 0;
 
 // У скетчі використовуємо багатозадачність FreeRTOS, розподіляючи на різні ядра
 // ESP32-WROOM-32D роботу веб-сервера (ядро 0) і обробку звуку/світла (ядро 1)
@@ -231,6 +234,8 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
   */
 
   static double avgAmpR = 0, avgAmpG = 0, avgAmpB = 0; // середні амплітуди між ітераціями lightMusicTask
+  static unsigned long current_time;
+
   /*
     Звичайна локальна змінна "забувається" після завершення функції. Статична
     зберігається в пам’яті і доступна при наступному виклику. Ініціалізація (=
@@ -241,6 +246,8 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
     повторної ініціалізації.
   */
   static int count = 0;
+
+  current_time = millis();
 
   while (true) {                        // безкінечний цикл обробки звуку та оновлення світлодіодів
     for (int i = 0; i < SAMPLES; i++) { // 1) Збір зразків: зчитування 128 значень з мікрофона. +робимо
@@ -458,17 +465,19 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
       else std::fill(leds_16_circle + 11, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(0, 0, 255));
 
     } else if (mode == 2) { // мале коло (12 LED)
-      int totalAmp = (ampR + ampG + ampB) / 3;
-      int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_12_circle + 0, leds_12_circle + NUM_LEDS_12_CIRCLE, CRGB(0, 0, brightness));
+      if (small_circle < const_digital_for_small_circle);
+      else small_circle = 0;
+      leds_12_circle[small_circle] = CRGB(0, 0, 255);
+      if (millis() - current_time > 300000 / avgEnergy) {
+        small_circle++;
+        current_time = millis();
+      }
 
     } else if (mode == 3) { // обидва кола
       int totalAmp = (ampR + ampG + ampB) / 3;
       int brightness = map(totalAmp, 0, 600, 0, 255);
       std::fill(leds_16_circle + 0, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(brightness, 0, 0));
       std::fill(leds_12_circle + 0, leds_12_circle + NUM_LEDS_12_CIRCLE, CRGB(0, brightness, 0));
-
-      // Нижче код для виконання на малому колі(12 ледів)
 
     } else if (mode == 4) { // лівий квадрат (16 LED) 
       int totalAmp = (ampR + ampG + ampB) / 3;
