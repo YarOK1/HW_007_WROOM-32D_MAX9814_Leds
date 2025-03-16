@@ -32,11 +32,10 @@
 #define LED_PIN_L_SQUARE 25  // пін для великого кола (16 LED)
 #define LED_PIN_R_SQUARE 32  // пін для малого кола (12 LED)
 
-#define NUM_LEDS_16_CIRCLE 16             // кількість LED у великому колі
-#define NUM_LEDS_12_CIRCLE 12             // кількість LED у малому колі
-#define NUM_LEDS_L_SQUARE 16              // кількість LED у лівому квадраті
-#define NUM_LEDS_R_SQUARE 16              // кількість LED у правому квадраті
-#define const_digital_for_small_circle 12 // константа для залиття малого кола
+#define NUM_LEDS_16_CIRCLE 16 // кількість LED у великому колі
+#define NUM_LEDS_12_CIRCLE 12 // кількість LED у малому колі
+#define NUM_LEDS_L_SQUARE 16  // кількість LED у лівому квадраті
+#define NUM_LEDS_R_SQUARE 16  // кількість LED у правому квадраті
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
@@ -55,9 +54,8 @@ double vImag[SAMPLES];                         // масив для зберіг
 volatile int mode = 2;                         // поточний режим роботи (встановлюється віддалено через веб-сервер);
                                                // volatile, бо використовується у кількох задачах
 
-int ampR, ampG, ampB; // для зберігання амплітуд частотних діапазонів: басів (R), середніх частот (G), високих частот (B)
-int small_circle = 0;
-int my_counter = 0;
+int ampR, ampG, ampB; // для зберігання амплітуд частотних діапазонів: басів (R), середніх частот (G), високих частот (B), для mode 1
+int small_circle = 0; // для mode 2
 
 // У скетчі використовуємо багатозадачність FreeRTOS, розподіляючи на різні ядра
 // ESP32-WROOM-32D роботу веб-сервера (ядро 0) і обробку звуку/світла (ядро 1)
@@ -106,8 +104,7 @@ void webServerTask(void *pvParameters) { // завдання для веб-се�
   server.on("/mode1", HTTP_GET, [](AsyncWebServerRequest *request) {
     mode = 1;
     AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
-    response->addHeader("Access-Control-Allow-Origin",
-                        "*"); // Додаємо CORS-заголовок
+    response->addHeader("Access-Control-Allow-Origin", "*"); // Додаємо CORS-заголовок
     request->send(response);
   });
   server.on("/mode2", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -218,24 +215,22 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
     Логіка роботи: аналіз звуку з аналогового входу, обробка сигналу за
     допомогою FFT для виділення частотних компонентів (баси, середні, високі).
     Керування світлодіодами WS2812B через бібліотеку FastLED у режимах, які
-    перемикаються через веб-сервер. Кроки перетворення "сирих" значень у плавну
-    світломузику: 
+    перемикаються через веб-сервер. 
+    Кроки перетворення "сирих" значень у плавну світломузику: 
       1) Збір зразків: зчитування 128 значень з мікрофона (analogRead). 
       2) Корекція аномалій: заміна значень < 0 або > 4095 на попереднє або 2048. 
       3) Видалення DC: віднімання середнього для усунення постійної складової. 
       4) Фільтрація: застосування IIR-фільтра для згладжування. 
       5) FFT: перетворення в частотну область (windowing, compute).
-      6) Обчислення амплітуд: перехід до величин (complexToMagnitude).
+      6) Обчислення амплітуд: перетворює комплексні числа у амплітуду для кожної частоти
       7) Розподіл частот: поділ на баси, середні, високі.
       8) Нормалізація: масштабування амплітуд за енергією сигналу.
       9) Ковзне середнє: згладжування амплітуд із часом.
       10) Керування LED: переведення амплітуд у кольори/яскравість залежно від
     режиму.
   */
-
   static double avgAmpR = 0, avgAmpG = 0, avgAmpB = 0; // середні амплітуди між ітераціями lightMusicTask
   static unsigned long current_time;
-
   /*
     Звичайна локальна змінна "забувається" після завершення функції. Статична
     зберігається в пам’яті і доступна при наступному виклику. Ініціалізація (=
@@ -278,9 +273,8 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
                      // складової. Починаємо з підрахунку середнього значення сигналу
     for (int i = 0; i < SAMPLES; i++) mean += vReal[i];
     mean /= SAMPLES;
-    for (int i = 0; i < SAMPLES; i++)
-      vReal[i] -= mean; // віднімаємо середнє значення сигналу (mean) від кожного
-                        // зразка, щоб позбутися постійної складової (DC offset)
+    // віднімаємо середнє значення сигналу (mean) від кожного зразка, щоб позбутися постійної складової (DC offset)
+    for (int i = 0; i < SAMPLES; i++) vReal[i] -= mean;
 
     static unsigned long lastPrint = 0; // виводимо "сирі" дані з мікрофона (після видалення DC); static -
                                         // щоб змінна зберігала значення між викликами функції
@@ -294,8 +288,9 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
       Serial.println();
     }
 
-    double filtered[SAMPLES]; // 4) Фільтрація: застосування IIR-фільтра для згладжування - простий рекурсивний фільтр
-                              // сигналу (IIR) щоб згладити сигнал
+    // 4) Фільтрація: застосування IIR-фільтра для згладжування - простий рекурсивний фільтр сигналу (IIR) щоб згладити сигнал
+    double filtered[SAMPLES];
+
     for (int i = 0; i < SAMPLES; i++) {
       filtered[i] = vReal[i];
       if (i > 0) filtered[i] = 0.7 * filtered[i - 1] + 0.3 * vReal[i]; // IIR-фільтр: 70% попереднього значення + 30% поточного
@@ -465,29 +460,171 @@ void lightMusicTask(void *pvParameters) { // обробка звуку та ке
       else std::fill(leds_16_circle + 11, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(0, 0, 255));
 
     } else if (mode == 2) { // мале коло (12 LED)
-      if (small_circle < const_digital_for_small_circle);
+      if (small_circle < NUM_LEDS_12_CIRCLE);
       else small_circle = 0;
       leds_12_circle[small_circle] = CRGB(0, 0, 255);
-      if (millis() - current_time > 300000 / avgEnergy) {
+      if (millis() - current_time > 1000000 / avgEnergy) {
+        Serial.print(millis() - current_time);
+        Serial.print(" > ");
+        Serial.print(1000000 / avgEnergy);
+        Serial.println("");
+
         small_circle++;
         current_time = millis();
       }
 
-    } else if (mode == 3) { // обидва кола
-      int totalAmp = (ampR + ampG + ampB) / 3;
-      int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_16_circle + 0, leds_16_circle + NUM_LEDS_16_CIRCLE, CRGB(brightness, 0, 0));
-      std::fill(leds_12_circle + 0, leds_12_circle + NUM_LEDS_12_CIRCLE, CRGB(0, brightness, 0));
+    } else if (mode == 3) { // велике коло (16)
 
-    } else if (mode == 4) { // лівий квадрат (16 LED) 
-      int totalAmp = (ampR + ampG + ampB) / 3;
-      int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_L_SQUARE + 0, leds_L_SQUARE + NUM_LEDS_L_SQUARE, CRGB(brightness, 0, 0));
-
-    } else if (mode == 5) { // правий квадрат (16 LED)
-      int totalAmp = (ampR + ampG + ampB) / 3;
-      int brightness = map(totalAmp, 0, 600, 0, 255);
-      std::fill(leds_R_SQUARE + 0, leds_R_SQUARE + NUM_LEDS_R_SQUARE, CRGB(0, brightness, 0));
+           if (avgEnergy <= 250) std::fill(leds_16_circle + 0 , leds_16_circle + 1, CRGB(255, 0, 170));
+      else if (avgEnergy <= 500) std::fill(leds_16_circle + 0 , leds_16_circle + 2, CRGB(255, 0, 170));
+      else if (avgEnergy <= 750) std::fill(leds_16_circle + 0 , leds_16_circle + 3, CRGB(255, 0, 170));
+      else if (avgEnergy <= 1000) std::fill(leds_16_circle + 0 , leds_16_circle + 4, CRGB(255, 0, 170));
+      else if (avgEnergy <= 1250) std::fill(leds_16_circle + 0 , leds_16_circle + 5, CRGB(255, 0, 170));
+      else if (avgEnergy <= 1500) std::fill(leds_16_circle + 0 , leds_16_circle + 6, CRGB(255, 0, 170));
+      else if (avgEnergy <= 1750) std::fill(leds_16_circle + 0 , leds_16_circle + 7, CRGB(255, 0, 170));
+      else if (avgEnergy <= 2000) std::fill(leds_16_circle + 0 , leds_16_circle + 8, CRGB(255, 0, 170));
+      else if (avgEnergy <= 2250) std::fill(leds_16_circle + 0 , leds_16_circle + 9, CRGB(255, 0, 170));
+      else if (avgEnergy <= 2500) std::fill(leds_16_circle + 0 , leds_16_circle + 10, CRGB(255, 0, 170));
+      else if (avgEnergy <= 2750) std::fill(leds_16_circle + 0 , leds_16_circle + 11, CRGB(255, 0, 170));
+      else if (avgEnergy <= 3000) std::fill(leds_16_circle + 0 , leds_16_circle + 12, CRGB(255, 0, 170));
+      else if (avgEnergy <= 3250) std::fill(leds_16_circle + 0 , leds_16_circle + 13, CRGB(255, 0, 170));
+      else if (avgEnergy <= 3500) std::fill(leds_16_circle + 0 , leds_16_circle + 14, CRGB(255, 0, 170));
+      else if (avgEnergy <= 3750) std::fill(leds_16_circle + 0 , leds_16_circle + 15, CRGB(255, 0, 170));
+      else if (avgEnergy <= 4000) std::fill(leds_16_circle + 0 , leds_16_circle + 16, CRGB(255, 0, 170));
+      
+ //     Serial.print(avgEnergy);
+    } else if (mode == 4) { // лівий квадрат (vRawData, транспонований, без FFT, 3 стовпчики)
+      // 1. Спрощена обробка "сирих" даних із vRawData
+      double rawMean = 0;
+      for (int i = 0; i < SAMPLES; i++) rawMean += vRawData[i];
+      rawMean /= SAMPLES; // Середнє значення сирих даних
+  
+      double rawAmplitude = 0;
+      for (int i = 0; i < SAMPLES; i++) {
+          rawAmplitude += abs(vRawData[i] - rawMean); // Абсолютна різниця від середнього
+      }
+      rawAmplitude /= SAMPLES; // Середня амплітуда відхилення
+  
+      // Масштабуємо амплітуду до 0–12 світлодіодів
+      int numLeds = map(rawAmplitude, 0, 500, 0, 13); // 0–12 LED, 500 — поріг чутливості
+      numLeds = constrain(numLeds, 0, 12);
+  
+      // 2. Очищаємо світлодіоди перед новим заповненням
+      FastLED.clear();
+  
+      // 3. Лівий квадрат: заповнення вертикальних стовпчиків
+      // Масиви індексів для кожного стовпчика
+      int redColumn[] = {0, 7, 8, 15};   // Перший стовпчик (червоний)
+      int greenColumn[] = {1, 6, 9, 14}; // Другий стовпчик (зелений)
+      int blueColumn[] = {2, 5, 10, 13}; // Третій стовпчик (синій)
+  
+      // Перший стовпчик (червоний): 0, 7, 8, 15 (до 4 LED)
+      if (numLeds > 0) {
+          for (int i = 0; i < min(numLeds, 4); i++) {
+              leds_L_SQUARE[redColumn[i]] = CRGB(255, 0, 0);
+          }
+      }
+      // Другий стовпчик (зелений): 1, 6, 9, 14 (наступні 4 LED, 5–8)
+      if (numLeds > 4) {
+          for (int i = 0; i < min(numLeds - 4, 4); i++) {
+              leds_L_SQUARE[greenColumn[i]] = CRGB(0, 255, 0);
+          }
+      }
+      // Третій стовпчик (синій): 2, 5, 10, 13 (наступні 4 LED, 9–12)
+      if (numLeds > 8) {
+          for (int i = 0; i < min(numLeds - 8, 4); i++) {
+              leds_L_SQUARE[blueColumn[i]] = CRGB(0, 0, 255);
+          }
+      }
+  
+      // 4. Показуємо результат
+      FastLED.show();
+  
+    } else if (mode == 5) { // лівий квадрат (vRawData), правий квадрат (vReal, інвертований)
+      // 1. Обробка "сирих" даних із vRawData для лівого квадрата
+      double rawReal[SAMPLES]; // Тимчасовий масив для реальних частин
+      double rawImag[SAMPLES]; // Тимчасовий масив для уявних частин
+      
+      // Копіюємо сирі дані та готуємо їх для FFT
+      for (int i = 0; i < SAMPLES; i++) {
+          rawReal[i] = vRawData[i];
+          rawImag[i] = 0; // Уявна частина = 0
+      }
+  
+      // Видаляємо DC offset (постійну складову)
+      double rawMean = 0;
+      for (int i = 0; i < SAMPLES; i++) rawMean += rawReal[i];
+      rawMean /= SAMPLES;
+      for (int i = 0; i < SAMPLES; i++) rawReal[i] -= rawMean;
+  
+      // Виконуємо FFT для сирих даних
+      FFT.windowing(rawReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+      FFT.compute(rawReal, rawImag, SAMPLES, FFT_FORWARD);
+      FFT.complexToMagnitude(rawReal, rawImag, SAMPLES);
+  
+      // Розподіл частот для сирих даних
+      double rawAmpR = 0, rawAmpG = 0, rawAmpB = 0;
+      for (int i = 0; i < SAMPLES; i++) {
+          if (i < 20) rawAmpR += abs(rawReal[i]);
+          else if (i < 80) rawAmpG += abs(rawReal[i]);
+          else rawAmpB += abs(rawReal[i]);
+      }
+      rawAmpR /= 20; // Усереднення басів
+      rawAmpG /= 60; // Усереднення середніх
+      rawAmpB /= 48; // Усереднення високих
+  
+      // Нормалізація за енергією
+      double rawTotalEnergy = 0;
+      for (int i = 0; i < SAMPLES; i++) {
+          rawTotalEnergy += rawReal[i] * rawReal[i];
+      }
+      double rawAvgEnergy = sqrt(rawTotalEnergy / SAMPLES);
+      if (rawAvgEnergy > 0) {
+          rawAmpR = (rawAmpR / rawAvgEnergy) * 150;
+          rawAmpG = (rawAmpG / rawAvgEnergy) * 100;
+          rawAmpB = (rawAmpB / rawAvgEnergy) * 150;
+      }
+  
+      // 2. Масштабування амплітуд до кількості світлодіодів (0–4)
+      int numLedsR_raw = map(rawAmpR, 0, 255, 0, 5); // Баси для vRawData
+      int numLedsG_raw = map(rawAmpG, 0, 255, 0, 5); // Середні для vRawData
+      int numLedsB_raw = map(rawAmpB, 0, 255, 0, 5); // Високі для vRawData
+  
+      int numLedsR = map(ampR, 0, 255, 0, 5); // Баси для vReal
+      int numLedsG = map(ampG, 0, 255, 0, 5); // Середні для vReal
+      int numLedsB = map(ampB, 0, 255, 0, 5); // Високі для vReal
+  
+      // Обмежуємо до 4 світлодіодів
+      numLedsR_raw = constrain(numLedsR_raw, 0, 4);
+      numLedsG_raw = constrain(numLedsG_raw, 0, 4);
+      numLedsB_raw = constrain(numLedsB_raw, 0, 4);
+      numLedsR = constrain(numLedsR, 0, 4);
+      numLedsG = constrain(numLedsG, 0, 4);
+      numLedsB = constrain(numLedsB, 0, 4);
+  
+      // 3. Очищаємо світлодіоди перед новим заповненням
+      FastLED.clear();
+  
+      // 4. Лівий квадрат (vRawData): заповнення стовпчиків (без змін)
+      // Червоний (баси): 0–3
+      fill_solid(leds_L_SQUARE, numLedsR_raw, CRGB(255, 0, 0));
+      // Зелений (середні): 4–7
+      fill_solid(leds_L_SQUARE + 4, numLedsG_raw, CRGB(0, 255, 0));
+      // Синій (високі): 8–11
+      fill_solid(leds_L_SQUARE + 8, numLedsB_raw, CRGB(0, 0, 255));
+  
+      // 5. Правий квадрат (vReal): інвертоване заповнення стовпчиків
+      // Червоний (баси): 15–12
+      fill_solid(leds_R_SQUARE + (NUM_LEDS_R_SQUARE - numLedsR), numLedsR, CRGB(255, 0, 0));
+      // Зелений (середні): 11–8
+      fill_solid(leds_R_SQUARE + (NUM_LEDS_R_SQUARE - 4 - numLedsG), numLedsG, CRGB(0, 255, 0));
+      // Синій (високі): 7–4
+      fill_solid(leds_R_SQUARE + (NUM_LEDS_R_SQUARE - 8 - numLedsB), numLedsB, CRGB(0, 0, 255));
+  
+      // 6. Показуємо результат
+      FastLED.show();
+  
+  
 
     } else if (mode == 6) { // обидва квадрати (32 LED)
       int totalAmp = (ampR + ampG + ampB) / 3;
@@ -540,7 +677,7 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   xTaskCreatePinnedToCore(webServerTask, "WebServerTask", 8192, NULL, 1, NULL, 0);
-  xTaskCreatePinnedToCore(lightMusicTask, "LightMusicTask", 8192, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(lightMusicTask, "LightMusicTask", 16384, NULL, 5, NULL, 1);
   /*
     Параметри:
       lightMusicTask — функція-завдання.

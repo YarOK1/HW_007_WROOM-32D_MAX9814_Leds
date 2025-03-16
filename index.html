@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>Керування світломузикою (домашня робота Ярослава)</title>
   <style>
@@ -8,9 +9,11 @@
       text-align: center;
       background-color: #f0f0f0;
     }
+
     h1 {
       color: #333;
     }
+
     button {
       padding: 10px 20px;
       margin: 5px;
@@ -21,25 +24,27 @@
       border: none;
       border-radius: 5px;
     }
+
     button:hover {
       background-color: #45a049;
     }
   </style>
 </head>
+
 <body>
   <h1>Керування світломузикою (домашня робота Ярослава)</h1>
   <p>Виберіть режим роботи:</p>
-  <button onclick="sendRequest('/mode1')">Режим 1: Більше коло (16 LED)</button><br>
-  <button onclick="sendRequest('/mode2')">Режим 2: Менше коло (12 LED)</button><br>
-  <button onclick="sendRequest('/mode3')">Режим 3: Обидва кола (28 LED)</button><br>
-  <button onclick="sendRequest('/mode4')">Режим 4: Лівий квадрат (16 LED)</button><br>
-  <button onclick="sendRequest('/mode5')">Режим 5: Правий квадрат (16 LED)</button><br>
-  <button onclick="sendRequest('/mode6')">Режим 6: Обидва квадрати (32 LED)</button><br>
-  <button onclick="sendRequest('/mode7')">Режим 7: Усе разом (60 LED)</button>
+  <button onclick="sendRequest('/mode1')">Режим 1: Більше коло - 1</button><br>
+  <button onclick="sendRequest('/mode2')">Режим 2: Менше коло</button><br>
+  <button onclick="sendRequest('/mode3')">Режим 3: Більше коло - 2</button><br>
+  <button onclick="sendRequest('/mode4')">Режим 4: Лівий квадрат - без FFT</button><br>
+  <button onclick="sendRequest('/mode5')">Режим 5: Два квадрати - "сирі" і оброблені дані</button><br>
+  <button onclick="sendRequest('/mode6')">Режим 6: ще немає алгоритму</button><br>
+  <button onclick="sendRequest('/mode7')">Режим 7: ще немає алгоритму</button>
 
   <script>
     const esp32Ip = "192.168.0.81";
-  
+
     function sendRequest(mode) {
       fetch(`http://${esp32Ip}:80${mode}`)
         .then(response => {
@@ -56,4 +61,5 @@
     }
   </script>
 </body>
+
 </html>
